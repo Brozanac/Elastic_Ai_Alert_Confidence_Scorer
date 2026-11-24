@@ -136,15 +136,15 @@ http://127.0.0.1:5173
 Method	Endpoint	Description
 GET	/	Project status
 GET	/health	Health check
-GET	/environment-context	Current environment context
+GET	/environment-context	Current environment context (requires X-API-Key)
 POST	/score-alert	Core alert scoring
 POST	/score-alert/report	Markdown report output
 POST	/score-alert/explain	Local AI-style explanation
 POST	/score-alert/llm-explain	Optional real LLM explanation
 POST	/score-alert/full	Full analysis and history save
-GET	/alerts/history	List saved analyses
-GET	/alerts/history/{history_id}	Get one saved analysis
-DELETE	/alerts/history/{history_id}	Delete saved analysis
+GET	/alerts/history	List saved analyses (requires X-API-Key)
+GET	/alerts/history/{history_id}	Get one saved analysis (requires X-API-Key)
+DELETE	/alerts/history/{history_id}	Delete saved analysis (requires X-API-Key)
 
 ## Sample Alerts
 
@@ -179,23 +179,33 @@ The LLM does not calculate the score.
 
 The confidence score is produced by deterministic scoring logic. The LLM, when enabled, only explains the existing score, evidence, MITRE mapping, and analyst next steps.
 
-Current Limitations
-Uses Elastic-style sample JSON, not direct Elastic API integration yet.
-Scoring logic is heuristic.
-MITRE mapping is rule-based.
-No authentication or user management.
-No production deployment hardening.
-LLM explanations require an API key.
-Future Improvements
-Connect directly to Elastic Security Alerts API
-Add Elastic Cases integration
-Add Attack Discovery validation
-Add historical baselining
-Add rule tuning recommendations
-Add user authentication
-Add export-to-PDF report feature
-Add unit tests
-Add CI/CD pipeline
+## Current Limitations
+
+- Uses Elastic-style sample JSON, not direct Elastic API integration yet.
+- Scoring logic is heuristic and rule-based.
+- MITRE mapping is rule-based.
+- Authentication is a single shared API key (`X-API-Key`) on the history and environment-context endpoints; there is no per-user login or role model yet.
+- If `APP_API_KEY` is not set, protected endpoints are locked (fail-closed). For local development only, set `ALLOW_UNAUTHENTICATED=true`.
+- Secrets are redacted before data is sent to the LLM and before it is saved, but other alert fields (host names, user names, IPs) are still sent to the external model when LLM explanations are enabled.
+- Not hardened for production deployment.
+
+## Already Done
+
+- 50+ automated tests (pytest), including API-level regression tests for network and file alerts.
+- CI on pushes to main and on pull requests: tests, pip-audit, Bandit, npm audit, Gitleaks.
+- Secret redaction before LLM calls and before database storage.
+- ISO 27001-aligned documentation in `docs/iso27001/`.
+
+## Future Improvements
+
+- Connect directly to the Elastic Security Alerts API
+- Add Elastic Cases integration
+- Add Attack Discovery validation
+- Add historical baselining
+- Add rule tuning recommendations
+- Replace the shared API key with per-user authentication and roles
+- Option to use a self-hosted LLM so no alert data leaves the environment
+- Add export-to-PDF report feature
 
 ---
 
