@@ -5,6 +5,7 @@ from typing import Any
 from app_logging import logger
 from dotenv import load_dotenv
 from openai import OpenAI
+from redaction import create_redacted_copy
 
 load_dotenv()
 
@@ -93,11 +94,13 @@ def generate_llm_explanation(
         model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         client = OpenAI()
 
+        # Mask secrets (passwords, tokens, keys in command lines) in everything
+        # that leaves our system for an external model, not just the alert.
         prompt = build_llm_prompt(
-            alert=alert,
-            score_result=score_result,
-            mitre_result=mitre_result,
-            next_steps=next_steps
+            alert=create_redacted_copy(alert),
+            score_result=create_redacted_copy(score_result),
+            mitre_result=create_redacted_copy(mitre_result),
+            next_steps=create_redacted_copy(next_steps)
         )
 
         response = client.responses.create(

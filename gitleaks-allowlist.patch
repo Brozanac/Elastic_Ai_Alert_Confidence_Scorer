@@ -1,0 +1,23 @@
+diff --git a/.gitleaks.toml b/.gitleaks.toml
+new file mode 100644
+index 0000000..8f3a7ea
+--- /dev/null
++++ b/.gitleaks.toml
+@@ -0,0 +1,17 @@
++# Gitleaks configuration
++# Keeps all default rules and ignores only the exact fake secrets that the
++# redaction tests use on purpose, and only inside tests/. Any other secret,
++# including a different one in tests/, is still reported.
++
++[extend]
++useDefault = true
++
++[allowlist]
++description = "Fake secrets used as fixtures in redaction tests"
++condition = "AND"
++paths = ['''^tests/.*\.py$''']
++regexes = [
++  '''^sk-test12345678901234567890$''',
++  '''^SuperSecret123$''',
++  '''^abcdef1234567890$''',
++]

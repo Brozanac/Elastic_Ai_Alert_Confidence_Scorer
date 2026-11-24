@@ -4,7 +4,8 @@ from main import app
 
 client = TestClient(app)
 
-def test_saved_history_redacts_secrets():
+def test_saved_history_redacts_secrets(monkeypatch):
+    monkeypatch.setenv("APP_API_KEY", "test-key")
     alert_with_secret = {
         "rule": {
             "name": "Suspicious PowerShell With Secret",
@@ -40,7 +41,9 @@ def test_saved_history_redacts_secrets():
 
     history_id = create_response.json()["history_id"]
 
-    history_response = client.get(f"/alerts/history/{history_id}")
+    history_response = client.get(
+        f"/alerts/history/{history_id}", headers={"X-API-Key": "test-key"}
+    )
 
     assert history_response.status_code == 200
 

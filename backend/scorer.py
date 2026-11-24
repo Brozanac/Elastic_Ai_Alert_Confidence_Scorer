@@ -1,3 +1,7 @@
+import ipaddress
+from functools import lru_cache
+
+from app_logging import logger
 from context_loader import load_environment_context
 
 SUSPICIOUS_PROCESSES = [
@@ -48,9 +52,53 @@ def is_external_ip(ip_address: str, environment_context: dict | None = None) -> 
     if environment_context is None:
         environment_context = load_environment_context()
 
-    trusted_prefixes = environment_context.get("trusted_internal_subnets", [])
+    try:
+        address = ipaddress.ip_address(str(ip_address).strip())
+    except ValueError:
+        # Not a valid IP: we cannot prove it is internal, so treat it as external.
+        return True
 
-    return not any(ip_address.startswith(prefix) for prefix in trusted_prefixes)
+    for entry in environment_context.get("trusted_internal_subnets", []):
+        network = _to_network(str(entry))
+        if network is not None and address in network:
+            return False
+
+    return True
+
+
+@lru_cache(maxsize=256)
+def _to_network(entry: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+    """Accept CIDR ("10.0.0.0/8") or the legacy prefix style ("10.", "192.168.").
+
+    An invalid entry is skipped with a warning instead of breaking scoring.
+    """
+    try:
+        entry = entry.strip()
+        if "/" in entry:
+            return ipaddress.ip_network(entry, strict=False)
+
+        octets = [o for o in entry.split(".") if o]
+        if not 1 <= len(octets) <= 4:
+            raise ValueError("expected 1-4 octets")
+        prefix_len = 8 * len(octets)
+        octets += ["0"] * (4 - len(octets))
+        return ipaddress.ip_network(f"{'.'.join(octets)}/{prefix_len}", strict=False)
+    except ValueError:
+        logger.warning("invalid_trusted_subnet_ignored entry=%r", entry)
+        return None
+
+
+def _has_data(value) -> bool:
+    """True if a (possibly nested) block holds at least one real value.
+
+    The normalizer leaves empty placeholders such as {"hash": {}}, which are
+    truthy dicts but carry no evidence.
+    """
+    if isinstance(value, dict):
+        return any(_has_data(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_data(v) for v in value)
+    return value not in (None, "")
 
 
 def detect_alert_type(alert: dict) -> str:
@@ -66,13 +114,15 @@ def detect_alert_type(alert: dict) -> str:
     if "authentication" in event_categories:
         return "authentication"
 
-    if process:
+    # The normalizer always adds an empty process/parent block, so only treat
+    # the alert as process execution when real process data is present.
+    if process.get("name") or process.get("command_line") or process.get("executable"):
         return "process_execution"
 
-    if network or "network" in event_categories:
+    if _has_data(network) or "network" in event_categories:
         return "network"
 
-    if file or "malware" in rule_name or "ransomware" in rule_name:
+    if _has_data(file) or "malware" in rule_name or "ransomware" in rule_name:
         return "file_or_malware"
 
     if "privilege" in rule_name or "escalation" in rule_name or "admin" in rule_name:

@@ -73,7 +73,7 @@ app.add_middleware(
     max_body_size=MAX_REQUEST_BODY_BYTES
 )
 
-@app.get("/environment-context")
+@app.get("/environment-context", dependencies=[Depends(require_api_key)])
 def get_environment_context():
     return load_environment_context()
 
